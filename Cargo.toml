@@ -1,0 +1,10 @@
+[package]
+authors = ["sam0x17 <sam@durosoft.com>"]
+edition = "2021"
+homepage = "https://sam0x17.dev"
+name = "audited"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
