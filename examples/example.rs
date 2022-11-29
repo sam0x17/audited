@@ -9,7 +9,6 @@ use audited::*;
     public: "2193B7E4EE81686E4FE7FA700967A4E142259152265449E5AE2D69B959464317"
 )]
 fn main() {
-    let a = 1;
-    let b = 2;
-    println!("{}", a + b);
+    let _a = 1;
+    let _b = 2;
 }
