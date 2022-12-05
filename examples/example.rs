@@ -1,6 +1,11 @@
 extern crate audited;
 use audited::*;
 
+mod some_mod {
+    pub struct MyStruct {}
+    pub struct MyOtherStruct {}
+}
+
 #[audited(
     sig: "895476084D37BC4C9EE5C469EB1BD1178AE631DA7903481123F379AB2A921A0F\
           75FBB06DCA306D9258F08C642788D8514CF531A3DF7F64095B507F4C98713F05",
@@ -9,6 +14,12 @@ use audited::*;
     public: "2193B7E4EE81686E4FE7FA700967A4E142259152265449E5AE2D69B959464317",
 )]
 fn main() {
+    #[audited_use("7FA700967A4E142")]
+    use some_mod::MyStruct;
+    let _c: MyStruct = MyStruct {};
+    #[audited_use]
+    use some_mod::MyOtherStruct;
+    let _d: MyOtherStruct = MyOtherStruct {};
     let _a = 1;
     let _b = 2;
 }

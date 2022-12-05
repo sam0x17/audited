@@ -2,6 +2,7 @@ extern crate derive_syn_parse;
 extern crate quote;
 extern crate syn;
 
+use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::{
@@ -9,7 +10,7 @@ use syn::{
     parse_macro_input,
     punctuated::Punctuated,
     spanned::Spanned,
-    FieldValue, Ident, LitBool, LitStr, Token,
+    FieldValue, Ident, ItemUse, LitBool, LitStr, Token,
 };
 
 struct RawArgs {
@@ -92,5 +93,27 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
             .into();
     }
     println!("{:#?}", parsed);
+    item
+}
+
+#[derive(Parse)]
+struct AuditedUseArgs {
+    hashcode: Option<LitStr>,
+}
+
+#[proc_macro_attribute]
+pub fn audited_use(args: TokenStream, item: TokenStream) -> TokenStream {
+    let item2 = item.clone();
+    parse_macro_input!(item2 as ItemUse);
+    let args = parse_macro_input!(args as AuditedUseArgs);
+    let hashcode: Option<String> = match args.hashcode {
+        None => None,
+        Some(lit) => Some(lit.value()),
+    };
+    if let Some(code) = hashcode {
+        println!("hashcode: {}", code);
+    } else {
+        println!("no hashcode");
+    }
     item
 }
