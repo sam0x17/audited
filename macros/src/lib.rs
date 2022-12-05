@@ -31,6 +31,7 @@ struct ParsedArgs {
     signed_by: Option<String>,
     public_key: Option<String>,
     allow_use: bool,
+    allow_extern_crate: bool,
 }
 
 const DEFAULT_ARGS: ParsedArgs = ParsedArgs {
@@ -39,6 +40,7 @@ const DEFAULT_ARGS: ParsedArgs = ParsedArgs {
     signed_by: None,
     public_key: None,
     allow_use: false,
+    allow_extern_crate: false,
 };
 
 #[proc_macro_attribute]
@@ -49,13 +51,22 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
         let field = arg.member.to_token_stream().into();
         let field = parse_macro_input!(field as Ident).to_string();
         let value = arg.expr.to_token_stream().into();
-        if field.as_str() == "allow_use" {
-            let value = parse_macro_input!(value as LitBool).value();
-            parsed.allow_use = value;
-            continue;
+        match field.as_str() {
+            // bool args
+            "allow_use" | "allow_extern_crate" => {
+                let value = parse_macro_input!(value as LitBool).value();
+                match field.as_str() {
+                    "allow_use" => parsed.allow_use = value,
+                    "allow_extern_crate" => parsed.allow_extern_crate = value,
+                    _ => panic!("invalid state"),
+                }
+                continue;
+            }
+            _ => {}
         }
         let value = parse_macro_input!(value as LitStr).value();
         match field.as_str() {
+            // string args
             "sig" => parsed.signature = Some(value),
             "timestamp" => parsed.timestamp = Some(value),
             "signed_by" => parsed.signed_by = Some(value),
