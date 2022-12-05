@@ -9,7 +9,7 @@ use syn::{
     parse_macro_input,
     punctuated::Punctuated,
     spanned::Spanned,
-    FieldValue, Ident, LitStr, Token,
+    FieldValue, Ident, LitBool, LitStr, Token,
 };
 
 struct RawArgs {
@@ -24,26 +24,36 @@ impl Parse for RawArgs {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct ParsedArgs {
     signature: Option<String>,
     timestamp: Option<String>,
     signed_by: Option<String>,
     public_key: Option<String>,
+    allow_use: bool,
 }
+
+const DEFAULT_ARGS: ParsedArgs = ParsedArgs {
+    signature: None,
+    timestamp: None,
+    signed_by: None,
+    public_key: None,
+    allow_use: false,
+};
 
 #[proc_macro_attribute]
 pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut parsed = ParsedArgs {
-        signature: None,
-        timestamp: None,
-        signed_by: None,
-        public_key: None,
-    };
+    let mut parsed = DEFAULT_ARGS;
     let args = parse_macro_input!(attr as RawArgs).args;
     for arg in args.clone().into_iter() {
         let field = arg.member.to_token_stream().into();
         let field = parse_macro_input!(field as Ident).to_string();
         let value = arg.expr.to_token_stream().into();
+        if field.as_str() == "allow_use" {
+            let value = parse_macro_input!(value as LitBool).value();
+            parsed.allow_use = value;
+            continue;
+        }
         let value = parse_macro_input!(value as LitStr).value();
         match field.as_str() {
             "sig" => parsed.signature = Some(value),
@@ -70,5 +80,6 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
             .to_compile_error()
             .into();
     }
+    println!("{:#?}", parsed);
     item
 }
