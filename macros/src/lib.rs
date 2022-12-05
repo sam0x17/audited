@@ -1,4 +1,5 @@
 extern crate derive_syn_parse;
+extern crate ed25519_dalek;
 extern crate quote;
 extern crate syn;
 
