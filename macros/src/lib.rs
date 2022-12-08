@@ -3,6 +3,11 @@ extern crate ed25519_dalek;
 extern crate quote;
 extern crate syn;
 
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
+
 use derive_syn_parse::Parse;
 use proc_macro::TokenStream;
 use quote::ToTokens;
@@ -11,7 +16,7 @@ use syn::{
     parse_macro_input,
     punctuated::Punctuated,
     spanned::Spanned,
-    FieldValue, Ident, ItemUse, LitBool, LitStr, Token,
+    FieldValue, Ident, Item, ItemUse, LitBool, LitStr, Token,
 };
 
 struct RawArgs {
@@ -24,6 +29,21 @@ impl Parse for RawArgs {
             args: Punctuated::<FieldValue, Token![,]>::parse_terminated(input)?,
         })
     }
+}
+
+fn generate_hash<T: Into<Item> + Clone>(item: &T) -> u64 {
+    let item = item.clone();
+    let mut hasher = DefaultHasher::new();
+    let item = Into::<Item>::into(item);
+    item.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn emit_error<T: Into<TokenStream> + Clone, S: Into<String>>(item: &T, message: S) -> TokenStream {
+    let item = Into::<TokenStream>::into(item.clone());
+    let message = Into::<String>::into(message);
+    let span = proc_macro2::TokenStream::from(item).span();
+    return syn::Error::new(span, message).to_compile_error().into();
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -74,26 +94,53 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
             "signed_by" => parsed.signed_by = Some(value),
             "public" => parsed.public_key = Some(value),
             _ => {
-                let span = proc_macro2::TokenStream::from(arg.to_token_stream()).span();
-                return syn::Error::new(span, "invalid attribute")
-                    .to_compile_error()
-                    .into();
+                return emit_error(&arg.to_token_stream(), "invalid attribute");
             }
         }
     }
     if parsed.signature == None {
-        let span = proc_macro2::TokenStream::from(args.to_token_stream()).span();
-        return syn::Error::new(span, "sig must be specified")
-            .to_compile_error()
-            .into();
+        return emit_error(&args.to_token_stream(), "sig is required");
     }
     if parsed.public_key == None {
-        let span = proc_macro2::TokenStream::from(args.to_token_stream()).span();
-        return syn::Error::new(span, "public must be specified")
-            .to_compile_error()
-            .into();
+        return emit_error(&args.to_token_stream(), "public is required");
     }
-    println!("{:#?}", parsed);
+    let tmp = item.clone();
+    let item_parsed = parse_macro_input!(tmp as Item);
+    let hash = generate_hash(&item_parsed);
+    match item_parsed {
+        Item::Mod(item) => {
+            if let Some(content) = item.content {
+                for child in content.1 {
+                    match child {
+                        Item::ExternCrate(_) => {
+                            if !parsed.allow_extern_crate {
+                                return emit_error(
+                                    &child.to_token_stream(),
+                                    "`extern crate` has been disabled for this module by the audited crate",
+                                );
+                            }
+                        }
+                        Item::Use(_) => {
+                            if !parsed.allow_use {
+                                return emit_error(
+                                    &child.to_token_stream(),
+                                    "`use` has been disabled for this module by the audited crate",
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        _ => {
+            let span = proc_macro2::TokenStream::from(item).span();
+            return syn::Error::new(span, "can only be applied to a module.")
+                .to_compile_error()
+                .into();
+        }
+    }
+    println!("hash: {}", hash);
     item
 }
 
