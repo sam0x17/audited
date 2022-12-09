@@ -4,7 +4,7 @@ extern crate quote;
 extern crate syn;
 
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, HashSet},
     hash::{Hash, Hasher},
 };
 
@@ -16,7 +16,8 @@ use syn::{
     parse_macro_input,
     punctuated::Punctuated,
     spanned::Spanned,
-    FieldValue, Ident, Item, ItemUse, LitBool, LitStr, Token,
+    visit::{self, Visit},
+    FieldValue, Ident, Item, ItemMod, ItemUse, LitBool, LitStr, Path, Token,
 };
 
 struct RawArgs {
@@ -65,6 +66,72 @@ const DEFAULT_ARGS: ParsedArgs = ParsedArgs {
     allow_extern_crate: false,
 };
 
+struct PathVisitor<'ast> {
+    paths: Vec<&'ast Path>,
+}
+
+impl<'ast> PathVisitor<'ast> {
+    pub fn new() -> PathVisitor<'ast> {
+        PathVisitor { paths: Vec::new() }
+    }
+}
+
+impl<'ast> Visit<'ast> for PathVisitor<'ast> {
+    fn visit_path(&mut self, path: &'ast Path) {
+        self.paths.push(path);
+        visit::visit_path(self, path);
+    }
+}
+
+fn scan_module_for_foreign_paths<'ast>(item: &ItemMod) -> Vec<Path> {
+    // get all paths in mod
+    let mut path_visitor = PathVisitor::new();
+    path_visitor.visit_item_mod(item);
+
+    // get top level item names
+    let mut top_level_item_names: HashSet<String> = HashSet::new();
+    if let Some(content) = &item.content {
+        for child in &content.1 {
+            if let Some(ident) = match child {
+                Item::Const(child) => Some(&child.ident),
+                Item::Enum(child) => Some(&child.ident),
+                Item::ExternCrate(child) => Some(&child.ident),
+                Item::Fn(child) => Some(&child.sig.ident),
+                Item::Macro(child) => {
+                    if let Some(ident) = &child.ident {
+                        Some(ident)
+                    } else {
+                        None
+                    }
+                }
+                Item::Macro2(child) => Some(&child.ident),
+                Item::Mod(child) => Some(&child.ident),
+                Item::Static(child) => Some(&child.ident),
+                Item::Struct(child) => Some(&child.ident),
+                Item::Trait(child) => Some(&child.ident),
+                Item::TraitAlias(child) => Some(&child.ident),
+                Item::Type(child) => Some(&child.ident),
+                Item::Union(child) => Some(&child.ident),
+                _ => None,
+            } {
+                top_level_item_names.insert(ident.to_string());
+            }
+        }
+    }
+
+    // find paths that don't have a top level mod name as their first segment
+    let mut foreign_paths: Vec<Path> = Vec::new();
+    for path in path_visitor.paths {
+        if let Some(segment) = path.segments.first() {
+            let name = segment.ident.to_string();
+            if !top_level_item_names.contains(&name) {
+                foreign_paths.push(path.clone());
+            }
+        }
+    }
+    foreign_paths
+}
+
 #[proc_macro_attribute]
 pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut parsed = DEFAULT_ARGS;
@@ -109,8 +176,8 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
     let hash = generate_hash(&item_parsed);
     match item_parsed {
         Item::Mod(item) => {
-            if let Some(content) = item.content {
-                for child in content.1 {
+            if let Some(content) = &item.content {
+                for child in &content.1 {
                     match child {
                         Item::ExternCrate(_) => {
                             if !parsed.allow_extern_crate {
@@ -132,12 +199,16 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
             }
+            let foreign_paths = scan_module_for_foreign_paths(&item);
+            if let Some(foreign_path) = foreign_paths.first() {
+                return emit_error(&foreign_path.to_token_stream(), "This path has not been marked as audited \
+                    and unaudited foreign paths have been disabled for this module. Please annotate a `use` \
+                    statement that brings this path into scope with `#[audited_use]` or add this path to the \
+                    `allowed_foreign_paths` list for this module.");
+            }
         }
         _ => {
-            let span = proc_macro2::TokenStream::from(item).span();
-            return syn::Error::new(span, "can only be applied to a module.")
-                .to_compile_error()
-                .into();
+            return emit_error(&item, "can only be applied to a module");
         }
     }
     println!("hash: {}", hash);

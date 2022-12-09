@@ -1,7 +1,13 @@
 extern crate audited;
 use audited::*;
 
-struct MyOtherStruct {}
+pub struct MyOtherStruct {}
+
+mod another_mod {
+    pub struct MyCoolStruct {}
+}
+
+pub use another_mod::*;
 
 #[audited(
     sig: "895476084D37BC4C9EE5C469EB1BD1178AE631DA7903481123F379AB2A921A0F\
@@ -12,18 +18,29 @@ struct MyOtherStruct {}
     allow_use: true
 )]
 mod some_mod {
+    use crate::*;
+
     pub struct MyStruct {}
 
-    type MyType = crate::MyOtherStruct;
+    mod sub_module {
+        pub struct _ThisIsOk {}
+    }
+
+    pub type _ThisIsOk = sub_module::_ThisIsOk;
+
+    //pub type MyOtherStruct = crate::MyOtherStruct;
+    //pub type MyOtherStruct2 = crate::MyOtherStruct;
+    pub const _SOMETHING: MyCoolStruct = MyCoolStruct {};
+    pub const _SOMETHING_ELSE: _ThisIsOk = sub_module::_ThisIsOk {};
 }
 
 fn main() {
-    #[audited_use("7FA700967A4E142")]
-    use some_mod::MyStruct;
-    let _c: MyStruct = MyStruct {};
-    #[audited_use]
-    use some_mod::MyOtherStruct;
-    let _d: MyOtherStruct = MyOtherStruct {};
-    let _a = 1;
-    let _b = 2;
+    // #[audited_use("7FA700967A4E142")]
+    // use some_mod::MyStruct;
+    // let _c: MyStruct = MyStruct {};
+    // #[audited_use]
+    // use some_mod::MyOtherStruct;
+    // let _d: MyOtherStruct = MyOtherStruct {};
+    // let _a = 1;
+    // let _b = 2;
 }
