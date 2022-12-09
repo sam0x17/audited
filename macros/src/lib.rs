@@ -55,6 +55,7 @@ struct ParsedArgs {
     public_key: Option<String>,
     allow_use: bool,
     allow_extern_crate: bool,
+    allow_unaudited_foreign_paths: bool,
 }
 
 const DEFAULT_ARGS: ParsedArgs = ParsedArgs {
@@ -64,6 +65,7 @@ const DEFAULT_ARGS: ParsedArgs = ParsedArgs {
     public_key: None,
     allow_use: false,
     allow_extern_crate: false,
+    allow_unaudited_foreign_paths: false,
 };
 
 struct PathVisitor<'ast> {
@@ -142,11 +144,12 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
         let value = arg.expr.to_token_stream().into();
         match field.as_str() {
             // bool args
-            "allow_use" | "allow_extern_crate" => {
+            "allow_use" | "allow_extern_crate" | "allow_unaudited_foreign_paths" => {
                 let value = parse_macro_input!(value as LitBool).value();
                 match field.as_str() {
                     "allow_use" => parsed.allow_use = value,
                     "allow_extern_crate" => parsed.allow_extern_crate = value,
+                    "allow_unaudited_foreign_paths" => parsed.allow_unaudited_foreign_paths = value,
                     _ => panic!("invalid state"),
                 }
                 continue;
@@ -199,12 +202,14 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
             }
-            let foreign_paths = scan_module_for_foreign_paths(&item);
-            if let Some(foreign_path) = foreign_paths.first() {
-                return emit_error(&foreign_path.to_token_stream(), "This path has not been marked as audited \
-                    and unaudited foreign paths have been disabled for this module. Please annotate a `use` \
-                    statement that brings this path into scope with `#[audited_use]` or add this path to the \
-                    `allowed_foreign_paths` list for this module.");
+            if !parsed.allow_unaudited_foreign_paths {
+                let foreign_paths = scan_module_for_foreign_paths(&item);
+                if let Some(foreign_path) = foreign_paths.first() {
+                    return emit_error(&foreign_path.to_token_stream(), "This path has not been marked as audited \
+                        and unaudited foreign paths have been disabled for this module. Please annotate a `use` \
+                        statement that brings this path into scope with `#[audited_use]` or add this path to the \
+                        `allowed_foreign_paths` list for this module.");
+                }
             }
         }
         _ => {

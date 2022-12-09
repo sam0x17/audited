@@ -15,12 +15,12 @@ pub use another_mod::*;
     timestamp: "Tue, 29 Nov 2022 05:11:31 +0000",
     signed_by: "Sam Johnson <sam@durosoft.com>",
     public: "2193B7E4EE81686E4FE7FA700967A4E142259152265449E5AE2D69B959464317",
-    allow_use: true
+    allow_use: true,
 )]
 mod some_mod {
     use crate::*;
 
-    pub struct MyStruct {}
+    pub struct _MyStruct {}
 
     mod sub_module {
         pub struct _ThisIsOk {}
