@@ -56,17 +56,23 @@ struct ParsedArgs {
     allow_use: bool,
     allow_extern_crate: bool,
     allow_unaudited_foreign_paths: bool,
+    allowed_foreign_paths: HashSet<String>,
 }
 
-const DEFAULT_ARGS: ParsedArgs = ParsedArgs {
-    signature: None,
-    timestamp: None,
-    signed_by: None,
-    public_key: None,
-    allow_use: false,
-    allow_extern_crate: false,
-    allow_unaudited_foreign_paths: false,
-};
+impl ParsedArgs {
+    pub fn new() -> ParsedArgs {
+        ParsedArgs {
+            signature: None,
+            timestamp: None,
+            signed_by: None,
+            public_key: None,
+            allow_use: false,
+            allow_extern_crate: false,
+            allow_unaudited_foreign_paths: false,
+            allowed_foreign_paths: HashSet::new(),
+        }
+    }
+}
 
 struct PathVisitor<'ast> {
     paths: Vec<&'ast Path>,
@@ -136,7 +142,7 @@ fn scan_module_for_foreign_paths<'ast>(item: &ItemMod) -> Vec<Path> {
 
 #[proc_macro_attribute]
 pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut parsed = DEFAULT_ARGS;
+    let mut parsed = ParsedArgs::new();
     let args = parse_macro_input!(attr as RawArgs).args;
     for arg in args.clone().into_iter() {
         let field = arg.member.to_token_stream().into();
@@ -145,24 +151,23 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
         match field.as_str() {
             // bool args
             "allow_use" | "allow_extern_crate" | "allow_unaudited_foreign_paths" => {
-                let value = parse_macro_input!(value as LitBool).value();
-                match field.as_str() {
-                    "allow_use" => parsed.allow_use = value,
-                    "allow_extern_crate" => parsed.allow_extern_crate = value,
-                    "allow_unaudited_foreign_paths" => parsed.allow_unaudited_foreign_paths = value,
-                    _ => panic!("invalid state"),
-                }
-                continue;
+                *match field.as_str() {
+                    "allow_use" => &mut parsed.allow_use,
+                    "allow_extern_crate" => &mut parsed.allow_extern_crate,
+                    "allow_unaudited_foreign_paths" => &mut parsed.allow_unaudited_foreign_paths,
+                    _ => panic!("unreachable"),
+                } = parse_macro_input!(value as LitBool).value();
             }
-            _ => {}
-        }
-        let value = parse_macro_input!(value as LitStr).value();
-        match field.as_str() {
             // string args
-            "sig" => parsed.signature = Some(value),
-            "timestamp" => parsed.timestamp = Some(value),
-            "signed_by" => parsed.signed_by = Some(value),
-            "public" => parsed.public_key = Some(value),
+            "sig" | "timestamp" | "signed_by" | "public" => {
+                *match field.as_str() {
+                    "sig" => &mut parsed.signature,
+                    "timestamp" => &mut parsed.timestamp,
+                    "signed_by" => &mut parsed.signed_by,
+                    "public" => &mut parsed.public_key,
+                    _ => panic!("unreachable"),
+                } = Some(parse_macro_input!(value as LitStr).value());
+            }
             _ => {
                 return emit_error(&arg.to_token_stream(), "invalid attribute");
             }
