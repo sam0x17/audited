@@ -17,7 +17,7 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     visit::{self, Visit},
-    FieldValue, Ident, Item, ItemMod, ItemUse, LitBool, LitStr, Path, Token,
+    ExprArray, FieldValue, Ident, Item, ItemMod, ItemUse, LitBool, LitStr, Path, Token,
 };
 
 struct RawArgs {
@@ -149,6 +149,16 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
         let field = parse_macro_input!(field as Ident).to_string();
         let value = arg.expr.to_token_stream().into();
         match field.as_str() {
+            "allowed_foreign_paths" => {
+                let arr = parse_macro_input!(value as ExprArray);
+                for lit in arr.elems {
+                    let lit = lit.to_token_stream().into();
+                    let path = parse_macro_input!(lit as Path)
+                        .to_token_stream()
+                        .to_string();
+                    parsed.allowed_foreign_paths.insert(path);
+                }
+            }
             // bool args
             "allow_use" | "allow_extern_crate" | "allow_unaudited_foreign_paths" => {
                 *match field.as_str() {
@@ -222,6 +232,7 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     println!("hash: {}", hash);
+    println!("parsed: {:#?}", parsed);
     item
 }
 

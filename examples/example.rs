@@ -16,9 +16,10 @@ pub use another_mod::*;
     signed_by: "Sam Johnson <sam@durosoft.com>",
     public: "2193B7E4EE81686E4FE7FA700967A4E142259152265449E5AE2D69B959464317",
     allow_use: true,
+    allowed_foreign_paths: [crate::MyOtherStruct],
 )]
 mod some_mod {
-    use crate::*;
+    //use crate::*;
 
     pub struct _MyStruct {}
 
@@ -30,7 +31,7 @@ mod some_mod {
 
     //pub type MyOtherStruct = crate::MyOtherStruct;
     //pub type MyOtherStruct2 = crate::MyOtherStruct;
-    pub const _SOMETHING: MyCoolStruct = MyCoolStruct {};
+    //pub const _SOMETHING: MyCoolStruct = MyCoolStruct {};
     pub const _SOMETHING_ELSE: _ThisIsOk = sub_module::_ThisIsOk {};
 }
 
