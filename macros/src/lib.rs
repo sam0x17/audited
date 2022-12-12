@@ -219,7 +219,13 @@ pub fn audited(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
             if !parsed.allow_unaudited_foreign_paths {
                 let foreign_paths = scan_module_for_foreign_paths(&item);
-                if let Some(foreign_path) = foreign_paths.first() {
+                for foreign_path in foreign_paths.iter() {
+                    if parsed
+                        .allowed_foreign_paths
+                        .contains(&foreign_path.to_token_stream().to_string())
+                    {
+                        continue;
+                    }
                     return emit_error(&foreign_path.to_token_stream(), "This path has not been marked as audited \
                         and unaudited foreign paths have been disabled for this module. Please annotate a `use` \
                         statement that brings this path into scope with `#[audited_use]` or add this path to the \
